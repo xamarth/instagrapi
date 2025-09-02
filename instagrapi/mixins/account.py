@@ -1,4 +1,3 @@
-import json
 from json.decoder import JSONDecodeError
 from pathlib import Path
 from typing import Dict
@@ -8,7 +7,7 @@ import requests
 from instagrapi.exceptions import ClientError, ClientLoginRequired
 from instagrapi.extractors import extract_account, extract_user_short
 from instagrapi.types import Account, UserShort
-from instagrapi.utils import dumps, gen_token, generate_signature
+from instagrapi.utils import dumps, gen_token
 
 
 class AccountMixin:
@@ -35,14 +34,9 @@ class AccountMixin:
                 "Accept": "*/*",
                 "Accept-Encoding": "gzip,deflate",
                 "Accept-Language": "en-US",
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) "
-                    "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                    "Version/11.1.2 Safari/605.1.15"
-                ),
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1.2 Safari/605.1.15",
             },
             proxies=self.public.proxies,
-            timeout=self.request_timeout,
         )
         try:
             return response.json()
@@ -62,108 +56,6 @@ class AccountMixin:
         """
         result = self.private_request("accounts/current_user/?edit=true")
         return extract_account(result["user"])
-
-    def change_password(
-        self,
-        old_password: str,
-        new_password: str,
-    ) -> bool:
-        """
-        Change password
-
-        Parameters
-        ----------
-        new_password: str
-            New password
-        old_password: str
-            Old password
-
-        Returns
-        -------
-        bool
-            A boolean value
-        """
-        try:
-            enc_old_password = self.password_encrypt(old_password)
-            enc_new_password = self.password_encrypt(new_password)
-            data = {
-                "enc_old_password": enc_old_password,
-                "enc_new_password1": enc_new_password,
-                "enc_new_password2": enc_new_password,
-            }
-            self.with_action_data(
-                {
-                    "_uid": self.user_id,
-                    "_uuid": self.uuid,
-                    "_csrftoken": self.token,
-                }
-            )
-            result = self.private_request("accounts/change_password/", data=data)
-            return result
-        except Exception as e:
-            self.logger.exception(e)
-            return False
-
-    def remove_bio_links(self, link_ids: list[int]) -> dict:
-        signed_body = {
-            "signed_body": "SIGNATURE." + json.dumps(
-                {
-                    "_uid": self.user_id,
-                    "_uuid": self.uuid,
-                    "link_ids": link_ids
-                }
-            )
-        }
-        return self.private_request('accounts/remove_bio_links/', data=signed_body, with_signature=False)
-
-    def set_external_url(self, external_url) -> dict:
-        """
-        Set new biography
-        """
-        data = dumps(
-            {
-                "updated_links": dumps(
-                    [{"url": external_url, "title": "", "link_type": "external"}]
-                ),
-                "_uid": self.user_id,
-                "_uuid": self.uuid,
-            }
-        )
-        return self.private_request(
-            "accounts/update_bio_links/",
-            data=generate_signature(data),
-            with_signature=False,
-        )
-
-    def account_set_private(self) -> bool:
-        """
-        Sets your account private
-
-        Returns
-        -------
-        Account
-            An object of Account class
-        """
-        assert self.user_id, "Login required"
-        user_id = str(self.user_id)
-        data = self.with_action_data({"_uid": user_id, "_uuid": self.uuid})
-        result = self.private_request("accounts/set_private/", data)
-        return result["status"] == "ok"
-
-    def account_set_public(self) -> bool:
-        """
-        Sets your account public
-
-        Returns
-        -------
-        Account
-            An object of Account class
-        """
-        assert self.user_id, "Login required"
-        user_id = str(self.user_id)
-        data = self.with_action_data({"_uid": user_id, "_uuid": self.uuid})
-        result = self.private_request("accounts/set_public/", data)
-        return result["status"] == "ok"
 
     def account_security_info(self) -> dict:
         """
@@ -188,9 +80,7 @@ class AccountMixin:
             "can_add_additional_totp_seed": false
             }
         """
-        return self.private_request(
-            "accounts/account_security_info/", self.with_default_data({})
-        )
+        return self.private_request("accounts/account_security_info/", self.with_default_data({}))
 
     def account_edit(self, **data: Dict) -> Account:
         """
@@ -208,32 +98,22 @@ class AccountMixin:
         """
         fields = (
             "external_url",
+            "phone_number",
             "username",
             "full_name",
             "biography",
-            "phone_number",
             "email",
         )
-        # if "email" in data:
-        #     # email is handled separately
-        #     self.send_confirm_email(data.pop("email"))
-        # if "phone_number" in data:
-        #     # phone_number is handled separately
-        #     self.send_confirm_phone_number(data.pop("phone_number"))
         data = {key: val for key, val in data.items() if key in fields}
-        if "email" not in data or "phone_number" not in data:
+        if "email" not in data and "phone_number" not in data:
             # Instagram Error: You need an email or confirmed phone number.
             user_data = self.account_info().dict()
             user_data = {field: user_data[field] for field in fields}
             data = dict(user_data, **data)
-        full_name = data.pop("full_name", None)
-        if full_name:
-            # Instagram original field-name for full user name is "first_name"
-            data["first_name"] = full_name
+        # Instagram original field-name for full user name is "first_name"
+        data["first_name"] = data.pop("full_name")
         # Biography with entities (markup)
-        result = self.private_request(
-            "accounts/edit_profile/", self.with_default_data(data)
-        )
+        result = self.private_request("accounts/edit_profile/", self.with_default_data(data))
         biography = data.get("biography")
         if biography:
             self.account_set_biography(biography)
@@ -253,10 +133,11 @@ class AccountMixin:
         bool
             A boolean value
         """
-        data = {"logged_in_uids": dumps([str(self.user_id)]), "raw_text": biography}
-        result = self.private_request(
-            "accounts/set_biography/", self.with_default_data(data)
-        )
+        data = {
+            "logged_in_uids": dumps([str(self.user_id)]),
+            "raw_text": biography
+        }
+        result = self.private_request("accounts/set_biography/", self.with_default_data(data))
         return result["status"] == "ok"
 
     def account_change_picture(self, path: Path) -> UserShort:
@@ -294,49 +175,6 @@ class AccountMixin:
         dict
         """
         return self.private_request(
-            "news/inbox/", params={"mark_as_seen": mark_as_seen}
-        )
-
-    def send_confirm_email(self, email: str) -> dict:
-        """
-        Send confirmation code to new email address
-
-        Parameters
-        ----------
-        email: str
-            Email address
-
-        Returns
-        -------
-        dict
-        """
-        return self.private_request(
-            "accounts/send_confirm_email/",
-            self.with_extra_data(
-                {"send_source": "personal_information", "email": email}
-            ),
-        )
-
-    def send_confirm_phone_number(self, phone_number: str) -> dict:
-        """
-        Send confirmation code to new phone number
-
-        Parameters
-        ----------
-        phone_number: str
-            Phone number
-
-        Returns
-        -------
-        dict
-        """
-        return self.private_request(
-            "accounts/initiate_phone_number_confirmation/",
-            self.with_extra_data(
-                {
-                    "android_build_type": "release",
-                    "send_source": "edit_profile",
-                    "phone_number": phone_number,
-                }
-            ),
+            "news/inbox/",
+            params={'mark_as_seen': mark_as_seen}
         )

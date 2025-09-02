@@ -21,18 +21,17 @@
 * [`StoryMention`](story.md) - Mention users in Story (user, coordinates and dimensions)
 * [`StoryHashtag`](story.md) - Hashtag for story (as sticker)
 * [`StorySticker`](story.md) - Tag sticker to story (for example from giphy)
-* [`StoryBuild`](story.md) - [StoryBuilder](https://github.com/subzeroid/instagrapi/blob/master/instagrapi/story.py) return path to photo/video and mention co-ordinates
+* [`StoryBuild`](story.md) - [StoryBuilder](https://github.com/adw0rd/instagrapi/blob/master/instagrapi/story.py) return path to photo/video and mention co-ordinates
 * [`DirectThread`](direct.md) - Thread (topic) with messages in Direct
 * [`DirectMessage`](direct.md) - Message in Direct
 * [`Insight`](insight.md) - Insights for a post
-* [`Track`](track.md) - Music track (for Reels/Clips)
 
 ## Interacting with Instagram Account
 
 `instagrapi` provides the following `Interactions` that can be used to control and get the information about your `Instagram` account:
 
 * Client(settings: dict = {}, proxy: str = ""): bool - Init `instagrapi` client
-
+  
 ``` python
 cl.login("instagrapi", "42")
 # cl.login("instagrapi", "42", verification_code="123456")  # with 2FA verification_code
@@ -40,14 +39,10 @@ cl.login("instagrapi", "42")
 cl.set_proxy("socks5://127.0.0.1:30235")
 # cl.set_proxy("http://username:password@127.0.0.1:8080")
 # cl.set_proxy("socks5://username:password@127.0.0.1:30235")
-# when addressing the proxy via hostname:
-# cl.set_proxy("socks5h://username:password@exampleproxy.tld:30235")
 
 print(cl.get_settings())
 print(cl.user_info(cl.user_id))
 ```
-
-We recommend using [these proxies](https://soax.com/?r=sEysufQI)
 
 ### Request
 
@@ -110,7 +105,7 @@ Store and manage uuids, device configuration, user agent, authorization data (ak
 | load\_settings(path: Path)     | dict    | Load session settings from file
 | dump\_settings(path: Path)     | bool    | Serialize and save session settings to file
 
-In order for Instagram [to trust you more](https://github.com/subzeroid/instagrapi/discussions/220), you must always login from one device and one IP (or from a subnet):
+In order for Instagram [to trust you more](https://github.com/adw0rd/instagrapi/discussions/220), you must always login from one device and one IP (or from a subnet):
 
 ```python
 cl = Client()
@@ -131,7 +126,7 @@ cl.get_timeline_feed()  # check session
 
 | Method                                   | Return | Description
 |------------------------------------------|------|----------------------------------------------------------------------------
-| set_proxy(dsn: str)                      | dict | Support socks and http/https proxy "scheme://username:password@host:port". We recommend using [these proxies](https://soax.com/?r=sEysufQI)
+| set_proxy(dsn: str)                      | dict | Support socks and http/https proxy "scheme://username:password@host:port"
 | private.proxies                          | dict | Stores used proxy servers for private (mobile, v1) requests
 | public.proxies                           | dict | Stores used proxy servers for public (web, graphql) requests
 | set_device(device: dict)                 | bool | Change device settings ([Android Device Information Generator Online](https://www.myfakeinfo.com/mobile/get-android-device-information.php))

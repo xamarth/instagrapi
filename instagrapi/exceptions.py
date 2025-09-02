@@ -5,38 +5,18 @@ class ClientError(Exception):
 
     def __init__(self, *args, **kwargs):
         args = list(args)
-        if len(args) > 0:
+        if args:
             self.message = str(args.pop(0))
         for key in list(kwargs.keys()):
             setattr(self, key, kwargs.pop(key))
         if not self.message:
             self.message = "{title} ({body})".format(
-                title=getattr(self, "reason", "Unknown"),
-                body=getattr(self, "error_type", vars(self)),
+                title=getattr(self, 'reason', 'Unknown'),
+                body=getattr(self, 'error_type', vars(self))
             )
         super().__init__(self.message, *args, **kwargs)
         if self.response:
             self.code = self.response.status_code
-
-
-class ClientUnknownError(ClientError):
-    pass
-
-
-class WrongCursorError(ClientError):
-    message = "You specified a non-existent cursor"
-
-
-class ClientStatusFail(ClientError):
-    pass
-
-
-class ClientErrorWithTitle(ClientError):
-    pass
-
-
-class ResetPasswordError(ClientError):
-    pass
 
 
 class GenericRequestError(ClientError):
@@ -57,10 +37,6 @@ class ClientConnectionError(ClientError):
 
 class ClientBadRequestError(ClientError):
     """Raised due to a HTTP 400 response"""
-
-
-class ClientUnauthorizedError(ClientError):
-    """Raised due to a HTTP 401 response"""
 
 
 class ClientForbiddenError(ClientError):
@@ -96,7 +72,7 @@ class PrivateError(ClientError):
 
 
 class NotFoundError(PrivateError):
-    reason = "Not found"
+    reason = 'Not found'
 
 
 class FeedbackRequired(PrivateError):
@@ -106,6 +82,8 @@ class FeedbackRequired(PrivateError):
 class ChallengeError(PrivateError):
     pass
 
+class ManualInputRequired(PrivateError):
+    pass
 
 class ChallengeRedirection(ChallengeError):
     pass
@@ -159,15 +137,7 @@ class RateLimitError(PrivateError):
     pass
 
 
-class ProxyAddressIsBlocked(PrivateError):
-    """Instagram has blocked your IP address, use a quality proxy provider (not free, not shared)"""
-
-
 class BadPassword(PrivateError):
-    pass
-
-
-class BadCredentials(PrivateError):
     pass
 
 
@@ -179,19 +149,11 @@ class UnknownError(PrivateError):
     pass
 
 
-class TrackNotFound(NotFoundError):
-    pass
-
-
 class MediaError(PrivateError):
     pass
 
 
 class MediaNotFound(NotFoundError, MediaError):
-    pass
-
-
-class StoryNotFound(NotFoundError, MediaError):
     pass
 
 
@@ -283,6 +245,10 @@ class AlbumConfigureError(PrivateError):
     pass
 
 
+class StoryNotFound(MediaNotFound):
+    pass
+
+
 class HashtagError(PrivateError):
     pass
 
@@ -305,53 +271,3 @@ class TwoFactorRequired(PrivateError):
 
 class HighlightNotFound(NotFoundError, PrivateError):
     pass
-
-
-class NoteNotFound(NotFoundError):
-    reason = "Not found"
-
-
-class PrivateAccount(PrivateError):
-    """This Account is Private"""
-
-
-class InvalidTargetUser(PrivateError):
-    """Invalid target user"""
-
-
-class InvalidMediaId(PrivateError):
-    """Invalid media_id"""
-
-
-class MediaUnavailable(PrivateError):
-    """Media is unavailable"""
-
-
-class ValidationError(AssertionError):
-    pass
-
-
-class EmailInvalidError(ClientError):
-    pass
-
-
-class EmailNotAvailableError(ClientError):
-    pass
-
-
-class EmailVerificationSendError(ClientError):
-    pass
-
-
-class AgeEligibilityError(ClientError):
-    pass
-
-
-class CaptchaChallengeRequired(ClientError):
-    """Captcha challenge required, and no solver is configured or available."""
-    def __init__(self, message="Captcha challenge required, but no solver configured or available.", challenge_details=None, **kwargs):
-        self.challenge_details = challenge_details if challenge_details else {}
-        # Example of extracting common details:
-        # self.site_key = self.challenge_details.get('site_key')
-        # self.challenge_url = self.challenge_details.get('challenge_url') # URL where captcha is presented
-        super().__init__(message, **kwargs)

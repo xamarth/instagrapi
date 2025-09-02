@@ -1,10 +1,9 @@
 import hashlib
 import json
-import random
 import time
+import asyncio
 from enum import Enum
 from typing import Dict
-
 import requests
 
 from instagrapi.exceptions import (
@@ -55,16 +54,14 @@ class ChallengeResolveMixin:
         challenge_url = last_json["challenge"]["api_path"]
         try:
             user_id, nonce_code = challenge_url.split("/")[2:4]
-            challenge_context = last_json.get("challenge", {}).get("challenge_context")
+            challenge_context = last_json.get('challenge', {}).get('challenge_context')
             if not challenge_context:
-                challenge_context = json.dumps(
-                    {
-                        "step_name": "",
-                        "nonce_code": nonce_code,
-                        "user_id": int(user_id),
-                        "is_stateless": False,
-                    }
-                )
+                challenge_context = json.dumps({
+                    "step_name": "",
+                    "nonce_code": nonce_code,
+                    "user_id": int(user_id),
+                    "is_stateless": False
+                })
             params = {
                 "guid": self.uuid,
                 "device_id": self.android_device_id,
@@ -111,7 +108,7 @@ class ChallengeResolveMixin:
         result = self.last_json
         challenge_url = "https://i.instagram.com%s" % challenge_url
         enc_password = "#PWD_INSTAGRAM_BROWSER:0:%s:" % str(int(time.time()))
-        instagram_ajax = hashlib.sha256(enc_password.encode()).hexdigest()[:12]
+        instagram_ajax = hashlib.md5(enc_password.encode()).hexdigest()[:12]
         session = requests.Session()
         session.verify = False  # fix SSLError/HTTPSConnectionPool
         session.proxies = self.private.proxies
@@ -122,11 +119,7 @@ class ChallengeResolveMixin:
                 "Mobile Safari/537.36 %s" % self.user_agent,
                 "upgrade-insecure-requests": "1",
                 "sec-fetch-dest": "document",
-                "accept": (
-                    "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                    "image/webp,image/apng,*/*;q=0.8,"
-                    "application/signed-exchange;v=b3;q=0.9"
-                ),
+                "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
                 "x-requested-with": "com.instagram.android",
                 "sec-fetch-site": "none",
                 "sec-fetch-mode": "navigate",
@@ -186,6 +179,7 @@ class ChallengeResolveMixin:
                 break
             except ChallengeRedirection:
                 return True  # instagram redirect
+#       loop = asyncio.get_running_loop()
         assert result.get("challengeType") in (
             "VerifyEmailCodeForm",
             "VerifySMSCodeForm",
@@ -239,12 +233,10 @@ class ChallengeResolveMixin:
         return True
 
     def challenge_resolve_new_password_form(self, result):
-        msg = " ".join(
-            [
-                "Log into your Instagram account from smartphone and change password!",
-                *extract_messages(result),
-            ]
-        )
+        msg = ' '.join([
+            'Log into your Instagram account from smartphone and change password!',
+            *extract_messages(result)
+        ])
         raise LegacyForceSetNewPasswordForm(msg)
 
     def handle_challenge_result(self, challenge: Dict):
@@ -368,24 +360,11 @@ class ChallengeResolveMixin:
             A boolean value
         """
         step_name = self.last_json.get("step_name", "")
-        if step_name == "delta_login_review" or step_name == "scraping_warning":
+        if step_name == "delta_login_review":
             # IT WAS ME (by GEO)
             self._send_private_request(challenge_url, {"choice": "0"})
             return True
-        elif step_name == "add_birthday":
-            random_year = random.randint(1970, 2004)
-            random_month = random.randint(1, 12)
-            random_day = random.randint(1, 28)
-            self._send_private_request(
-                challenge_url,
-                {
-                    "birthday_year": str(random_year),
-                    "birthday_month": str(random_month),
-                    "birthday_day": str(random_day),
-                },
-            )
-            return True
-        elif step_name in ("verify_email", "verify_email_code", "select_verify_method"):
+        elif step_name in ("verify_email", "select_verify_method"):
             if step_name == "select_verify_method":
                 """
                 {'step_name': 'select_verify_method',
@@ -403,27 +382,18 @@ class ChallengeResolveMixin:
                 steps = self.last_json["step_data"].keys()
                 challenge_url = challenge_url[1:]
                 if "email" in steps:
-                    self._send_private_request(
-                        challenge_url, {"choice": ChallengeChoice.EMAIL}
-                    )
+                    self._send_private_request(challenge_url, {"choice": ChallengeChoice.EMAIL})
                 elif "phone_number" in steps:
-                    self._send_private_request(
-                        challenge_url, {"choice": ChallengeChoice.SMS}
-                    )
+                    self._send_private_request(challenge_url, {"choice": ChallengeChoice.SMS})
                 else:
-                    raise ChallengeError(
-                        f'ChallengeResolve: Choice "email" or "phone_number" '
-                        f"(sms) not available to this account {self.last_json}"
-                    )
+                    raise ChallengeError(f'ChallengeResolve: Choice "email" or "phone_number" (sms) not available to this account {self.last_json}')
             wait_seconds = 5
             for attempt in range(24):
                 code = self.challenge_code_handler(self.username, ChallengeChoice.EMAIL)
                 if code:
                     break
                 time.sleep(wait_seconds)
-            print(
-                f'Code entered "{code}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)'
-            )
+            print(f'Code entered "{code}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)')
             self._send_private_request(challenge_url, {"security_code": code})
             # assert 'logged_in_user' in client.last_json
             assert self.last_json.get("action", "") == "close"
@@ -439,9 +409,7 @@ class ChallengeResolveMixin:
             #  'flow_render_type': 3,
             #  'bloks_action': 'com.instagram.challenge.navigation.take_challenge',
             #  'cni': 18226879502000588,
-            #  'challenge_context': '{"step_name": "change_password",
-            #      "cni": 18226879502000588, "is_stateless": false,
-            #      "challenge_type_enum": "PASSWORD_RESET"}',
+            #  'challenge_context': '{"step_name": "change_password", "cni": 18226879502000588, "is_stateless": false, "challenge_type_enum": "PASSWORD_RESET"}',
             #  'challenge_type_enum_str': 'PASSWORD_RESET',
             #  'status': 'ok'}
             wait_seconds = 5
@@ -450,90 +418,10 @@ class ChallengeResolveMixin:
                 if pwd:
                     break
                 time.sleep(wait_seconds)
-            print(
-                f'Password entered "{pwd}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)'
-            )
-            return self.bloks_change_password(pwd, self.last_json["challenge_context"])
+            print(f'Password entered "{pwd}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)')
+            return self.bloks_change_password(pwd, self.last_json['challenge_context'])
         elif step_name == "selfie_captcha":
             raise ChallengeSelfieCaptcha(self.last_json)
-        elif step_name == "select_contact_point_recovery":
-            """
-            {
-                'step_name': 'select_contact_point_recovery',
-                'step_data': {'choice': '0',
-                    'phone_number': '+62 ***-****-**11',
-                    'email': 'g*******b@w**.de',
-                    'hl_co_enabled': False,
-                    'sigp_to_hl': False
-                },
-                'flow_render_type': 3,
-                'bloks_action': 'com.instagram.challenge.navigation.take_challenge',
-                'cni': 178623487724,
-                'challenge_context': '{"step_name": "select_contact_point_recovery",
-                "cni": 178623487724,
-                "is_stateless": false,
-                "challenge_type_enum": "HACKED_LOCK",
-                "present_as_modal": false}',
-                'challenge_type_enum_str': 'HACKED_LOCK',
-                'status': 'ok'
-            }
-            """
-            steps = self.last_json["step_data"].keys()
-            challenge_url = challenge_url[1:]
-            if "email" in steps:
-                self._send_private_request(
-                    challenge_url, {"choice": ChallengeChoice.EMAIL}
-                )
-            elif "phone_number" in steps:
-                self._send_private_request(
-                    challenge_url, {"choice": ChallengeChoice.SMS}
-                )
-            else:
-                raise ChallengeError(
-                    f'ChallengeResolve: Choice "email" or "phone_number" (sms) '
-                    f"not available to this account {self.last_json}"
-                )
-            wait_seconds = 5
-            for attempt in range(24):
-                code = self.challenge_code_handler(self.username, ChallengeChoice.EMAIL)
-                if code:
-                    break
-                time.sleep(wait_seconds)
-            print(
-                f'Code entered "{code}" for {self.username} ({attempt} attempts by {wait_seconds} seconds)'
-            )
-            self._send_private_request(challenge_url, {"security_code": code})
-
-            if self.last_json.get("action", "") == "close":
-                assert self.last_json.get("status", "") == "ok"
-                return True
-
-            # last form to verify account details
-            assert (
-                self.last_json["step_name"] == "review_contact_point_change"
-            ), f"Unexpected step_name {self.last_json['step_name']}"
-
-            # details = self.last_json["step_data"]
-
-            # TODO: add validation of account details
-            # assert self.username == details['username'], \
-            #     f"Data invalid: {self.username} does not match {details['username']}"
-            # assert self.email == details['email'], \
-            #     f"Data invalid: {self.email} does not match {details['email']}"
-            # assert self.phone_number == details['phone_number'], \
-            #     f"Data invalid: {self.phone_number} does not match {details['phone_number']}"
-
-            # "choice": 0 ==> details look good
-            self._send_private_request(challenge_url, {"choice": 0})
-
-            # TODO: assert that the user is now logged in.
-            # # assert 'logged_in_user' in client.last_json
-            # assert self.last_json.get("action", "") == "close"
-            # assert self.last_json.get("status", "") == "ok"
-            return True
         else:
-            raise ChallengeUnknownStep(
-                f'ChallengeResolve: Unknown step_name "{step_name}" for '
-                f'"{self.username}" in challenge resolver: {self.last_json}'
-            )
+            raise ChallengeUnknownStep(f'ChallengeResolve: Unknown step_name "{step_name}" for "{self.username}" in challenge resolver: {self.last_json}')
         return True

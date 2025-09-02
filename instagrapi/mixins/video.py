@@ -1,4 +1,6 @@
-import random
+import random, json
+import subprocess
+import shlex
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -25,7 +27,6 @@ from instagrapi.types import (
     StoryLocation,
     StoryMedia,
     StoryMention,
-    StoryPoll,
     StorySticker,
     Usertag,
 )
@@ -46,7 +47,7 @@ class DownloadVideoMixin:
         media_pk: int
             Unique Media ID
         folder: Path, optional
-            Directory in which you want to download the video, default is "" and will download the files to working dir.
+            Directory in which you want to download the album, default is "" and will download the files to working dir.
 
         Returns
         -------
@@ -73,7 +74,7 @@ class DownloadVideoMixin:
         filename: str, optional
             Filename for the media
         folder: Path, optional
-            Directory in which you want to download the video, default is "" and will download the files to working
+            Directory in which you want to download the album, default is "" and will download the files to working
                 directory
 
         Returns
@@ -81,26 +82,12 @@ class DownloadVideoMixin:
         Path
             Path for the file downloaded
         """
-        url = str(url)
         fname = urlparse(url).path.rsplit("/", 1)[1]
         filename = "%s.%s" % (filename, fname.rsplit(".", 1)[1]) if filename else fname
         path = Path(folder) / filename
-        response = requests.get(url, stream=True, timeout=self.request_timeout)
+        response = requests.get(url, stream=True)
         response.raise_for_status()
-        try:
-            content_length = int(response.headers.get("Content-Length"))
-        except TypeError:
-            print(
-                """
-                The program detected an mis-formatted link, and hence can't download it.
-                This problem occurs when the URL is passed into
-                    'video_download_by_url()' or the 'clip_download_by_url()'.
-                The raw URL needs to be re-formatted into one that is recognizable by the methods.
-                Use this code: url=self.cl.media_info(self.cl.media_pk_from_url('insert the url here')).video_url
-                You can remove the 'self' from the code above if needed.
-                """
-            )
-            raise Exception("The program detected an mis-formatted link.")
+        content_length = int(response.headers.get("Content-Length"))
         file_length = len(response.content)
         if content_length != file_length:
             raise VideoNotDownload(
@@ -110,30 +97,6 @@ class DownloadVideoMixin:
             f.write(response.content)
             f.close()
         return path.resolve()
-
-    def video_download_by_url_origin(self, url: str) -> bytes:
-        """
-        Download video using URL
-
-        Parameters
-        ----------
-        url: str
-            URL for a media
-
-        Returns
-        -------
-        bytes
-            Bytes for the file downloaded
-        """
-        response = requests.get(url, stream=True, timeout=self.request_timeout)
-        response.raise_for_status()
-        content_length = int(response.headers.get("Content-Length"))
-        file_length = len(response.content)
-        if content_length != file_length:
-            raise VideoNotDownload(
-                f'Broken file from url "{url}" (Content-length={content_length}, but file length={file_length})'
-            )
-        return response.content
 
 
 class UploadVideoMixin:
@@ -290,7 +253,7 @@ class UploadVideoMixin:
                     caption,
                     usertags,
                     location,
-                    extra_data=extra_data,
+                    extra_data=extra_data
                 )
             except Exception as e:
                 if "Transcode not finished yet" in str(e):
@@ -306,7 +269,10 @@ class UploadVideoMixin:
                     media = configured.get("media")
                     self.expose()
                     return extract_media_v1(media)
-        raise VideoConfigureError(response=self.last_response, **self.last_json)
+        raise VideoConfigureError(
+            response=self.last_response,
+            **self.last_json
+        )
 
     def video_configure(
         self,
@@ -370,7 +336,7 @@ class UploadVideoMixin:
             "extra": {"source_width": width, "source_height": height},
             "device": self.device,
             "caption": caption,
-            **extra_data,
+            **extra_data
         }
         return self.private_request(
             "media/configure/?video=1", self.with_default_data(data)
@@ -387,7 +353,6 @@ class UploadVideoMixin:
         hashtags: List[StoryHashtag] = [],
         stickers: List[StorySticker] = [],
         medias: List[StoryMedia] = [],
-        polls: List[StoryPoll] = [],
         extra_data: Dict[str, str] = {},
     ) -> Story:
         """
@@ -413,8 +378,6 @@ class UploadVideoMixin:
             List of stickers to be tagged on this upload, default is empty list.
         medias: List[StoryMedia], optional
             List of medias to be tagged on this upload, default is empty list.
-        polls: List[StoryPoll], optional
-            List of polls to be included on this upload, default is empty list.
         extra_data: Dict[str, str], optional
             Dict of extra data, if you need to add your params, like {"share_to_facebook": 1}.
 
@@ -446,8 +409,7 @@ class UploadVideoMixin:
                     hashtags,
                     stickers,
                     medias,
-                    polls,
-                    extra_data=extra_data,
+                    extra_data=extra_data
                 )
             except Exception as e:
                 if "Transcode not finished yet" in str(e):
@@ -468,10 +430,11 @@ class UploadVideoMixin:
                     locations=locations,
                     stickers=stickers,
                     medias=medias,
-                    polls=polls,
-                    **extract_media_v1(media).dict(),
+                    **extract_media_v1(media).dict()
                 )
-        raise VideoConfigureStoryError(response=self.last_response, **self.last_json)
+        raise VideoConfigureStoryError(
+            response=self.last_response, **self.last_json
+        )
 
     def video_configure_to_story(
         self,
@@ -487,7 +450,6 @@ class UploadVideoMixin:
         hashtags: List[StoryHashtag] = [],
         stickers: List[StorySticker] = [],
         medias: List[StoryMedia] = [],
-        polls: List[StoryPoll] = [],
         thread_ids: List[int] = [],
         extra_data: Dict[str, str] = {},
     ) -> Dict:
@@ -520,8 +482,6 @@ class UploadVideoMixin:
             List of stickers to be tagged on this upload, default is empty list.
         medias: List[StoryMedia], optional
             List of medias to be tagged on this upload, default is empty list.
-        polls: List[StoryPoll], optional
-            List of polls to be included on this upload, default is empty list.
         thread_ids: List[int], optional
             List of Direct Message Thread ID (to send a story to a thread)
         extra_data: Dict[str, str], optional
@@ -533,23 +493,13 @@ class UploadVideoMixin:
             A dictionary of response from the call
         """
         timestamp = int(time.time())
-        mentions = mentions.copy()
-        locations = locations.copy()
-        links = links.copy()
-        hashtags = hashtags.copy()
-        stickers = stickers.copy()
-        medias = medias.copy()
-        polls = polls.copy()
-        thread_ids = thread_ids.copy()
         story_sticker_ids = []
         data = {
-            # USE extra_data TO EXTEND THE SETTINGS OF THE LOADED STORY,
-            #   USE FOR EXAMPLE THE PROPERTIES SPECIFIED IN THE COMMENT:
+            # USE extra_data TO EXTEND THE SETTINGS OF THE LOADED STORY, USE FOR EXAMPLE THE PROPERTIES SPECIFIED IN THE COMMENT:
             # ---------------------------------
             # When send to DIRECT:
             # "allow_multi_configures": "1",
-            # "client_context":"6823316152962778207",
-            #      ^----- token = random.randint(6800011111111111111, 6800099999999999999) from direct.py
+            # "client_context":"6823316152962778207",  <-- token = random.randint(6800011111111111111, 6800099999999999999) from direct.py
             # "is_shh_mode":"0",
             # "mutation_token":"6824688191453546273",
             # "nav_chain":"1qT:feed_timeline:1,1qT:feed_timeline:7,ReelViewerFragment:reel_feed_timeline:21,5HT:attribution_quick_camera_fragment:22,4ji:reel_composer_preview:23,8wg:direct_story_audience_picker:24,4ij:reel_composer_camera:25,ReelViewerFragment:reel_feed_timeline:26",
@@ -571,35 +521,34 @@ class UploadVideoMixin:
             # "is_segmented_video": "1",  # SEGMENT MODE
             # ---------------------------------
             # COMMON properties:
-            "_uid": str(self.user_id),
             "supported_capabilities_new": dumps(config.SUPPORTED_CAPABILITIES),
-            "has_original_sound": "1",
-            "filter_type": "0",
+            # "has_original_sound": "1",
+            # "filter_type": "0",
             "camera_session_id": self.client_session_id,
-            "camera_entry_point": str(random.randint(35, 164)),
-            "composition_id": self.generate_uuid(),
-            # "camera_make": self.device_settings.get("manufacturer", "Xiaomi"),
-            # "camera_model": self.device_settings.get("model", "MI+5s"),
+            "camera_entry_point": str(random.randint(35, 45)),
+            # "date_time_digitalized":"2021:03:12+00:59:35",
+            # "composition_id":"ce3b1324-3761-4e8a-9212-fbac6c5e7d7d"
+            "camera_make": self.device_settings.get("manufacturer", "Xiaomi"),
+            "camera_model": self.device_settings.get("model", "MI+5s"),
             "timezone_offset": str(self.timezone_offset),
             "client_timestamp": str(timestamp),
             "client_shared_at": str(timestamp - 7),  # 7 seconds ago
             # "imported_taken_at": str(timestamp - 5 * 24 * 3600),  # 5 days ago
             "date_time_original": date_time_original(time.localtime()),
-            # "date_time_digitalized": date_time_original(time.localtime()),
             # "story_sticker_ids": "",
             # "media_folder": "Camera",
             "configure_mode": "1",
             # "configure_mode": "2", <- when direct
-            "source_type": "3",  # "3"
-            "video_result": "",
+            "source_type": "4",  # "3"
+            # "video_result": "",
             "creation_surface": "camera",
-            # "software": config.SOFTWARE.format(**self.device_settings),
-            # "caption": caption,
+            "software": config.SOFTWARE.format(**self.device_settings),
+            "caption": caption,
             "capture_type": "normal",
-            # "rich_text_format_types": '["classic_v2"]',  # default, typewriter
+            "rich_text_format_types": '["classic_v2"]',  # default, typewriter
             "upload_id": upload_id,
-            # "scene_capture_type": "standard",
-            # "scene_type": "",
+            "scene_capture_type": "standard",
+            "scene_type": "",
             "original_media_type": "video",
             "camera_position": "back",
             # Facebook Sharing Part:
@@ -610,34 +559,27 @@ class UploadVideoMixin:
             # "fb_access_token":"EAABwzLixnjYBACVgqBfLyDuPWs6RN2sTZC........cnNkjHCH2",
             # "attempt_id": str(uuid4()),
             "device": self.device,
-            "length": duration,
-            "clips": [
-                {"length": duration, "source_type": "3", "camera_position": "back"}
-            ],
+            # "length": duration,
+            # "clips": [{"length": duration, "source_type": "4"}],
             # "edits": {
-            #     "filter_type": 0,
-            #     "filter_strength": 1.0,
-            #     "crop_original_size": [width, height],
-            #     # "crop_center": [0, 0],
-            #     # "crop_zoom": 1
+            #     "crop_original_size": [
+            #         960,
+            #         960
+            #     ],
+            #     "crop_center": [
+            #         0,
+            #         0
+            #     ],
+            #     "crop_zoom": 1
             # },
-            "media_transformation_info": dumps(
-                {
-                    "width": str(width),
-                    "height": str(height),
-                    "x_transform": "0",
-                    "y_transform": "0",
-                    "zoom": "1.0",
-                    "rotation": "0.0",
-                    "background_coverage": "0.0",
-                }
-            ),
             "extra": {"source_width": width, "source_height": height},
-            "audio_muted": False,
-            "poster_frame_index": 0,
-            # "app_attribution_android_namespace": "",
+            # "audio_muted": False,
+            # "poster_frame_index": 0,
         }
         data.update(extra_data)
+        if links:
+            links = [link.dict() for link in links]
+            data["story_cta"] = dumps([{"links": links}])
         tap_models = []
         static_models = []
         if mentions:
@@ -688,7 +630,7 @@ class UploadVideoMixin:
                     "tag_name": mention.hashtag.name,
                     "is_sticker": True,
                     "tap_state": 0,
-                    "tap_state_str_id": "hashtag_sticker_gradient",
+                    "tap_state_str_id": "hashtag_sticker_gradient"
                 }
                 tap_models.append(item)
         if locations:
@@ -706,148 +648,70 @@ class UploadVideoMixin:
                     "location_id": str(mention.location.pk),
                     "is_sticker": True,
                     "tap_state": 0,
-                    "tap_state_str_id": "location_sticker_vibrant",
+                    "tap_state_str_id": "location_sticker_vibrant"
                 }
                 tap_models.append(item)
-        if links:
-            # instagram allow one link now
-            link = links[0]
-            self.private_request(
-                "media/validate_reel_url/",
-                {
-                    "url": str(link.webUri),
-                    "_uid": str(self.user_id),
-                    "_uuid": str(self.uuid),
-                },
-            )
-            stickers.append(
-                StorySticker(
-                    type="story_link",
-                    x=link.x,
-                    y=link.y,
-                    z=link.z,
-                    width=link.width,
-                    height=link.height,
-                    rotation=link.rotation,
-                    extra=dict(
-                        link_type="web",
-                        url=str(link.webUri),
-                        tap_state_str_id="link_sticker_default",
-                    ),
-                )
-            )
-            story_sticker_ids.append("link_sticker_default")
         if stickers:
             for sticker in stickers:
-                sticker_extra = sticker.extra or {}
-                if sticker.id:
-                    sticker_extra["str_id"] = sticker.id
-                    story_sticker_ids.append(sticker.id)
-                tap_models.append(
-                    {
-                        "x": round(sticker.x, 7),
-                        "y": round(sticker.y, 7),
-                        "z": sticker.z,
-                        "width": round(sticker.width, 7),
-                        "height": round(sticker.height, 7),
-                        "rotation": sticker.rotation,
-                        "type": sticker.type,
-                        "is_sticker": True,
-                        "selected_index": 0,
-                        "tap_state": 0,
-                        **sticker_extra,
-                    }
-                )
+                str_id = sticker.id  # "gif_Igjf05J559JWuef4N5"
+                static_models.append({
+                    "x": sticker.x,
+                    "y": sticker.y,
+                    "z": sticker.z,
+                    "width": sticker.width,
+                    "height": sticker.height,
+                    "rotation": sticker.rotation,
+                    "str_id": str_id,
+                    "sticker_type": sticker.type,
+                })
+                story_sticker_ids.append(str_id)
                 if sticker.type == "gif":
                     data["has_animated_sticker"] = "1"
         if medias:
             for feed_media in medias:
-                assert feed_media.media_pk, "Required StoryMedia.media_pk"
+                assert feed_media.media_pk, 'Required StoryMedia.media_pk'
                 # if not feed_media.user_id:
                 #     user = self.media_user(feed_media.media_pk)
                 #     feed_media.user_id = user.pk
                 item = {
-                    "x": feed_media.x,
-                    "y": feed_media.y,
-                    "z": feed_media.z,
-                    "width": feed_media.width,
-                    "height": feed_media.height,
-                    "rotation": feed_media.rotation,
-                    "type": "feed_media",
-                    "media_id": str(feed_media.media_pk),
-                    "media_owner_id": str(feed_media.user_id or ""),
-                    "product_type": "feed",
-                    "is_sticker": True,
-                    "tap_state": 0,
-                    "tap_state_str_id": "feed_post_sticker_square",
+                    'x': feed_media.x,
+                    'y': feed_media.y,
+                    'z': feed_media.z,
+                    'width': feed_media.width,
+                    'height': feed_media.height,
+                    'rotation': feed_media.rotation,
+                    'type': 'feed_media',
+                    'media_id': str(feed_media.media_pk),
+                    'media_owner_id': str(feed_media.user_id or ""),
+                    'product_type': 'feed',
+                    'is_sticker': True,
+                    'tap_state': 0,
+                    'tap_state_str_id': 'feed_post_sticker_square'
                 }
                 tap_models.append(item)
             data["reshared_media_id"] = str(feed_media.media_pk)
-        if polls:
-            story_sticker_ids.append("polling_sticker_v2")
-            for poll in polls:
-                poll_extra = poll.extra or {}
-                tap_models.append(
-                    {
-                        "x": round(poll.x, 7),
-                        "y": round(poll.y, 7),
-                        "z": poll.z,
-                        "width": round(poll.width, 7),
-                        "height": round(poll.height, 7),
-                        "rotation": poll.rotation,
-                        "type": poll.type,
-                        "poll_type": poll.poll_type,
-                        "is_sticker": True,
-                        "tap_state": 0,
-                        "tap_state_str_id": "polling_sticker_v2",
-                        "is_multi_option_poll": poll.is_multi_option,
-                        "is_shared_result": poll.is_shared_result,
-                        "viewer_can_vote": poll.viewer_can_vote,
-                        "finished": poll.finished,
-                        "color": poll.color,
-                        "question": poll.question,
-                        "tallies": [
-                            {
-                                "count": 0,
-                                "font_size": 39.0,
-                                "text": o
-                            }
-                            for o in poll.options
-                        ],
-                        **poll_extra,
-                    }
-                )
         if thread_ids:
             # Send to direct thread
             token = self.generate_mutation_token()
-            data.update(
-                {
-                    "configure_mode": "2",
-                    "allow_multi_configures": "1",
-                    "client_context": token,
-                    "is_shh_mode": "0",
-                    "mutation_token": token,
-                    "nav_chain": (
-                        "1qT:feed_timeline:1,1qT:feed_timeline:7,ReelViewerFragment:reel_feed_timeline:21,"
-                        "5HT:attribution_quick_camera_fragment:22,4ji:reel_composer_preview:23,"
-                        "8wg:direct_story_audience_picker:24,4ij:reel_composer_camera:25,"
-                        "ReelViewerFragment:reel_feed_timeline:26"
-                    ),
-                    "recipient_users": "[]",
-                    "send_attribution": "direct_story_audience_picker",
-                    "thread_ids": dumps([str(tid) for tid in thread_ids]),
-                    "view_mode": "replayable",
-                }
-            )
+            data.update({
+                "configure_mode": "2",
+                "allow_multi_configures": "1",
+                "client_context": token,
+                "is_shh_mode": "0",
+                "mutation_token": token,
+                "nav_chain": "1qT:feed_timeline:1,1qT:feed_timeline:7,ReelViewerFragment:reel_feed_timeline:21,5HT:attribution_quick_camera_fragment:22,4ji:reel_composer_preview:23,8wg:direct_story_audience_picker:24,4ij:reel_composer_camera:25,ReelViewerFragment:reel_feed_timeline:26",
+                "recipient_users": "[]",
+                "send_attribution": "direct_story_audience_picker",
+                "thread_ids": dumps([str(tid) for tid in thread_ids]),
+                "view_mode": "replayable"
+            })
         if tap_models:
             data["tap_models"] = dumps(tap_models)
         if static_models:
             data["static_models"] = dumps(static_models)
         if story_sticker_ids:
-            data["story_sticker_ids"] = story_sticker_ids[0]
-        return self.private_request(
-            "media/configure_to_story/?video=1", self.with_default_data(data)
-        )
+            data["story_sticker_ids"] = dumps(story_sticker_ids)
+        return self.private_request("media/configure_to_story/", self.with_default_data(data))
 
     def video_upload_to_direct(
         self,
@@ -902,7 +766,7 @@ class UploadVideoMixin:
                     mentions=mentions,
                     medias=medias,
                     thread_ids=thread_ids,
-                    extra_data=extra_data,
+                    extra_data=extra_data
                 )
             except Exception as e:
                 if "Transcode not finished yet" in str(e):
@@ -914,8 +778,10 @@ class UploadVideoMixin:
                     continue
                 raise e
             if configured and thread_ids:
-                return extract_direct_message(configured.get("message_metadata", [])[0])
-        raise VideoConfigureStoryError(response=self.last_response, **self.last_json)
+                return extract_direct_message(configured.get('message_metadata', [])[0])
+        raise VideoConfigureStoryError(
+            response=self.last_response, **self.last_json
+        )
 
 
 def analyze_video(path: Path, thumbnail: Path = None) -> tuple:
@@ -935,24 +801,32 @@ def analyze_video(path: Path, thumbnail: Path = None) -> tuple:
         (width, height, duration, thumbnail)
     """
 
-    try:
-        import moviepy.editor as mp
-    except ImportError:
-        try:
-            import moviepy as mp
-        except ImportError:
-            raise Exception("Please install moviepy>=1.0.3 and retry")
 
-    print(f'Analyzing video file "{path}"')
-    video = mp.VideoFileClip(str(path))
-    width, height = video.size
+    print(f'Analizing video file "{path}"')
+    width, height, duration = get_data(path)
     if not thumbnail:
-        thumbnail = f"{path}.jpg"
+        thumbnail = f"{path}.jpg".replace(" ", "")
         print(f'Generating thumbnail "{thumbnail}"...')
-        video.save_frame(thumbnail, t=(video.duration / 2))
-    # duration = round(video.duration + 0.001, 3)
-    try:
-        video.close()
-    except AttributeError:
-        pass
-    return width, height, video.duration, thumbnail
+        cmd = f'ffmpeg -ss {duration/2} -an -s 404x720 -vframes 1 {thumbnail} -y -i'
+        args = shlex.split(cmd)
+        args.append(str(path))
+        run_cmd(args)
+    return width, height, duration, thumbnail
+
+
+def run_cmd(args=[]) -> List:
+    return subprocess.check_output(args).decode('utf-8')
+
+def get_sec(duration: str) -> str:
+    ts = duration.split('.')[0]
+    return sum(int(x) * 60 ** i for i, x in enumerate(reversed(ts.split(':'))))
+
+def get_data(file: Path) -> bool:
+    cmd = 'ffprobe -v quiet -print_format json -show_streams'
+    args = shlex.split(cmd)
+    args.append(file)
+    data = json.loads(run_cmd(args))
+    height = data['streams'][0]['height']
+    width = data['streams'][0]['width']
+    duration = data['streams'][-1].get('duration') or get_sec(data['streams'][-1]['tags']['DURATION'])
+    return height, width, int(float(duration))

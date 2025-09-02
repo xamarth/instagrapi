@@ -2,13 +2,11 @@
 
 Viewing and managing your profile
 
-| Method                                       | Return    | Description
-| -------------------------------------------- | --------- | ----------------------------------------------------------
-| account_info()                               | Account   | Get private info for your account (e.g. email, phone_number)
+| Method                             | Return    | Description
+| ---------------------------------- | --------- | ----------------------------------------------------------
+| account_info()                     | Account | Get private info for your account (e.g. email, phone_number)
 | account_edit(email: str, phone_number: str, username: str, full_name: str, biography: str, external_url: str) | Account | Change profile data
-| account_change_picture(path: Path)           | UserShort | Change Profile picture
-| send_confirm_email(email: str)               | dict      | Send confirmation code to new email address
-| send_confirm_phone_number(phone_number: str) | dict      | Send confirmation code to new phone number
+| account_change_picture(path: Path) | UserShort | Change Profile picture
 
 Example:
 
@@ -18,49 +16,30 @@ Example:
 >>> cl.login(USERNAME, PASSWORD)
 >>> cl.account_info().dict()
 {'pk': 1903424587,
- 'username': 'example',
- 'full_name': 'Example Example',
+ 'username': 'adw0rd',
+ 'full_name': 'Mikhail Andreev',
  'is_private': False,
  'profile_pic_url': HttpUrl('https://instagram.frix7-1.fna.fbcdn.net/v/t51.2885-19/s150x150/200092102_504535360754500_904902738723095864_n.jpg?tp=1&_nc_ht=instagram.frix7-1.fna.fbcdn.net&_nc_ohc=T2ZT6yA6XzoAX9MvAQA&edm=AJlpnE4BAAAA&ccb=7-4&oh=3865b51bb33b365c9de8bcf9775e519c&oe=60E982F2&_nc_sid=312772'),
  'is_verified': False,
  'biography': 'Engineer: Python, JavaScript, Erlang, Go, Swift\n@dhbastards \n@bestskatetrick \n@asphalt_kings_lb \n@best_drift_daily \n@wrclive \n@surferyone \n@bmxtravel',
- 'external_url': 'https://example.org/',
+ 'external_url': 'https://adw0rd.com/',
  'is_business': False,
  'birthday': '1984-01-01',
  'phone_number': '+79991234567',
  'gender': 1,
  'email': '...@gmail.com'}
 
->>> cl.account_edit(external_url='https://github.com/subzeroid/instagrapi')
-Account(pk=1903424587, username='example', ..., external_url='https://github.com/subzeroid/instagrapi')
+>>> cl.account_edit(external_url='https://github.com/adw0rd/instagrapi')
+Account(pk=1903424587, username='adw0rd', ..., external_url='https://github.com/adw0rd/instagrapi')
 
 >>> media_pk = cl.media_pk_from_url('https://www.instagram.com/p/BWnh360Fitr/')
 1560364774164147051
 
 >>> profile_pic_path = cl.photo_download(media_pk, folder='/tmp')
-PosixPath('/tmp/example_1560364774164147051.jpg')
+PosixPath('/tmp/adw0rd_1560364774164147051.jpg')
 
 >>> cl.account_change_picture(profile_pic_path)
-UserShort(pk=1903424587, username='example', ...)
-
->>> cl.send_confirm_email("addr@example.com")
-{
-    'is_email_legit': False,
-    'title': 'Email Already in Use',
-    'body': 'The email address you entered is already used on your account. Enter a different one to update your contact info.',
-    'error_type': 'email_unchanged',
-    'status': 'ok'
-}
-
->>> cl.send_confirm_phone_number("+5599999999")
-{
-    'action': 'sms_sent',
-    'phone_verification_settings': {'max_sms_count': 2,
-    'resend_sms_delay_sec': 60,
-    'robocall_count_down_time_sec': 30,
-    'robocall_after_max_sms': True},
-    'status': 'ok'
-}
+UserShort(pk=1903424587, username='adw0rd', ...)
 ```
 
 Low level methods:

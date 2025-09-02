@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
     case $arg in
         --format-code)
         BLACK_ACTION="--quiet"
-        ISORT_ACTION=""
+        ISORT_ACTION="--recursive"
         ;;
         -h|--help)
         usage
@@ -36,7 +36,7 @@ done
 
 python -m unittest tests.FakeClientTestCase tests.ClientPublicTestCase
 
-echo "Running isort..."
+echo "Running iSort..."
 isort ${ISORT_ACTION} instagrapi
 
 echo "Running flake8..."

@@ -1,4 +1,5 @@
-import contextlib
+import subprocess
+import shlex
 import json
 import random
 import time
@@ -181,7 +182,7 @@ class UploadIGTVMixin:
                     caption,
                     usertags,
                     location,
-                    extra_data=extra_data,
+                    extra_data=extra_data
                 )
             except ClientError as e:
                 if "Transcode not finished yet" in str(e):
@@ -267,7 +268,7 @@ class UploadIGTVMixin:
             "extra": {"source_width": width, "source_height": height},
             "audio_muted": False,
             "poster_frame_index": 70,
-            **extra_data,
+            **extra_data
         }
         return self.private_request(
             "media/configure_to_igtv/?video=1",
@@ -292,48 +293,32 @@ def analyze_video(path: Path, thumbnail: Path = None) -> tuple:
     Tuple
         A tuple with (thumbail path, width, height, duration)
     """
-    try:
-        import moviepy.editor as mp
-    except ImportError:
-        try:
-            import moviepy as mp
-        except ImportError:
-            raise Exception("Please install moviepy>=1.0.3 and retry")
 
-    print(f'Analyzing IGTV file "{path}"')
-    with contextlib.ExitStack() as stack:
-        video = mp.VideoFileClip(str(path))
-        width, height = video.size
-        if not thumbnail:
-            thumbnail = f"{path}.jpg"
-            print(f'Generating thumbnail "{thumbnail}"...')
-            video.save_frame(thumbnail, t=(video.duration / 2))
-            crop_thumbnail(thumbnail)
-        stack.enter_context(contextlib.closing(video))
-    return thumbnail, width, height, video.duration
+    print(f'Analizing IGTV file "{path}"')
+    width, height, duration = get_data(path)
+    if not thumbnail:
+        thumbnail = f"{path}.jpg".replace(" ", "")
+        print(f'Generating thumbnail "{thumbnail}"...')
+        cmd = f'ffmpeg -ss {duration/2} -an -s 404x720 -vframes 1 {thumbnail} -y -i'
+        args = shlex.split(cmd)
+        args.append(str(path))
+        run_cmd(args)
+    return thumbnail, width, height, duration
 
 
-def crop_thumbnail(path: Path) -> bool:
-    """
-    Analyze and crop thumbnail if need
+def run_cmd(args=[]) -> List:
+    return subprocess.check_output(args).decode('utf-8')
 
-    Parameters
-    ----------
-    path: Path
-        Path to the video
+def get_sec(duration: str) -> str:
+    ts = duration.split('.')[0]
+    return sum(int(x) * 60 ** i for i, x in enumerate(reversed(ts.split(':'))))
 
-    Returns
-    -------
-    bool
-        A boolean value
-    """
-    im = Image.open(str(path))
-    width, height = im.size
-    offset = (height / 1.78) / 2
-    center = width / 2
-    # Crop the center of the image
-    im = im.crop((center - offset, 0, center + offset, height))
-    with open(path, "w") as fp:
-        im.save(fp)
-        im.close()
-    return True
+def get_data(file: Path) -> bool:
+    cmd = 'ffprobe -v quiet -print_format json -show_streams'
+    args = shlex.split(cmd)
+    args.append(file)
+    data = json.loads(run_cmd(args))
+    height = data['streams'][0]['height']
+    width = data['streams'][0]['width']
+    duration = data['streams'][-1].get('duration') or get_sec(data['streams'][-1]['tags']['DURATION'])
+    return height, width, int(float(duration))
